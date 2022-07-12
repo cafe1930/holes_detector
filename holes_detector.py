@@ -171,7 +171,7 @@ if __name__ == '__main__':
         overall_area_size=(300, 110),
         working_frame_coords=(110, 0, 300, 110),
         path_to_saved_model='pretrained_custom_unet_scripted.pt',
-        nn_device='cpu' 
+        nn_device='cuda' 
     )
 
     cnt = 0
