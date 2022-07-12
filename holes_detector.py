@@ -52,13 +52,13 @@ class PixelCoords2mmConverter:
 
 class ContoursCentersGenerator:
     def __init__(
-        self,
-        path_to_saved_model,
-        device='cpu',
-        nn_input_size=(256, 256),
-        img_norm_mean=(0, 0, 0),
-        img_norm_std=(1, 1, 1),
-        processing_type=np.float32
+            self,
+            path_to_saved_model,
+            device='cpu',
+            nn_input_size=(256, 256),
+            img_norm_mean=(0, 0, 0),
+            img_norm_std=(1, 1, 1),
+            processing_type=np.float32
         ):
         self.model = torch.jit.load(path_to_saved_model).to(device).eval()
         #self.model = smp.UNet(classes=2).to(device).eval()
@@ -73,8 +73,6 @@ class ContoursCentersGenerator:
         '''
         image normalization and transforming to torch.tensor
         '''
-        # hard code - cut the image rectangle
-        img = img[120:280, 120:560]
         if self.processing_type != np.uint8:
             img = img/255
 
@@ -105,15 +103,22 @@ class ContoursCentersGenerator:
         return centers
 
     def __call__(self, img):
+
+        # hard code - cut the image rectangle
+        img = img[120:280, 120:560]
         
         img = self.to_tensor(cv2.resize(img, self.nn_input_size))
+        #!!!!!
+        print(img.shape)
 
         with torch.no_grad():
             img = img.to(self.device)
             mask = torch.argmax(self.model(img), dim=1).squeeze(0).cpu().numpy().astype(np.uint8)
         # opencv 3.2.0 is installed on jetson  
-        mask, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        
+        if cv2.__version__.startswith('3.'):
+            mask, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        else:
+            contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         centers = []
         contours = self.filter_contours(contours)
         centers = self.compute_centers(contours)
@@ -148,10 +153,12 @@ class HolesDetector:
         # coordinates in millineters
         if len(centers) > 0:
             center_coords = self.pixel_coords_converter(centers)
+            '''
             if len(center_coords) > 1:
                 center_coords = np.array(center_coords)
                 center_coords[1:] = center_coords[1:] - center_coords[:-1]
                 center_coords = center_coords.tolist()
+            '''
         else:
             center_coords = []
 
@@ -164,7 +171,7 @@ if __name__ == '__main__':
         overall_area_size=(300, 110),
         working_frame_coords=(110, 0, 300, 110),
         path_to_saved_model='pretrained_custom_unet_scripted.pt',
-        nn_device='cuda' 
+        nn_device='cpu' 
     )
 
     cnt = 0
@@ -176,12 +183,11 @@ if __name__ == '__main__':
         t0 = time.time()
 
         center_coords_list = detector()
-        print(center_coords_list)
-
         if len(center_coords_list) > 0:
             # launch the exterminatus!
             # port_name = either '/dev/tty.*' (for Ubuntu/Linux) or 'COM*' (for Windows)
             main_destroyer(center_coords_list, port_name = 'INIT_APPROPRIATE_JETSON_PORT')
+            pass
 
         t1 = time.time()
 
